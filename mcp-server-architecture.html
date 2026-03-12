@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VideoSDK MCP Server – Architecture</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0a0e1a;
+    color: #e0e6f0;
+    min-height: 100vh;
+    padding: 40px 24px;
+  }
+
+  h1 {
+    text-align: center;
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subtitle {
+    text-align: center;
+    color: #7a8ba8;
+    font-size: 14px;
+    margin-bottom: 48px;
+  }
+
+  .diagram {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+
+  /* ── Phase rows ── */
+  .phase {
+    display: flex;
+    align-items: flex-start;
+    gap: 24px;
+  }
+  .phase-label {
+    min-width: 140px;
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    text-align: center;
+    flex-shrink: 0;
+    margin-top: 12px;
+  }
+  .phase-content {
+    flex: 1;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: #111827;
+    border: 1px solid #1e293b;
+    border-radius: 14px;
+    padding: 20px;
+    flex: 1;
+    min-width: 220px;
+    position: relative;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: #334155; }
+  .card-icon {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    margin-bottom: 12px;
+  }
+  .card h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #f1f5f9;
+  }
+  .card p {
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: #8896ab;
+  }
+  .card code {
+    background: #1e293b;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11.5px;
+    color: #93c5fd;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  /* ── Phase colors ── */
+  .phase-startup .phase-label { background: #172554; color: #60a5fa; border: 1px solid #1e3a5f; }
+  .phase-startup .card { border-left: 3px solid #3b82f6; }
+  .phase-startup .card-icon { background: #172554; }
+
+  .phase-search .phase-label { background: #1a2e05; color: #84cc16; border: 1px solid #2d4a0a; }
+  .phase-search .card { border-left: 3px solid #84cc16; }
+  .phase-search .card-icon { background: #1a2e05; }
+
+  .phase-tools .phase-label { background: #2e1065; color: #c084fc; border: 1px solid #4c1d95; }
+  .phase-tools .card { border-left: 3px solid #a855f7; }
+  .phase-tools .card-icon { background: #2e1065; }
+
+  .phase-transport .phase-label { background: #422006; color: #fb923c; border: 1px solid #6b3410; }
+  .phase-transport .card { border-left: 3px solid #f97316; }
+  .phase-transport .card-icon { background: #422006; }
+
+  /* ── Arrow connectors ── */
+  .arrow-row {
+    display: flex;
+    justify-content: center;
+    position: relative;
+  }
+  .arrow-row svg {
+    width: 40px;
+    height: 32px;
+    margin-left: 140px;
+  }
+  .arrow-row svg path {
+    stroke: #334155;
+    stroke-width: 2;
+    fill: none;
+  }
+  .arrow-row svg polygon {
+    fill: #475569;
+  }
+
+  /* ── Flow line inside cards ── */
+  .flow-steps {
+    margin-top: 10px;
+    padding: 0;
+    list-style: none;
+  }
+  .flow-steps li {
+    position: relative;
+    padding-left: 22px;
+    padding-bottom: 8px;
+    font-size: 12px;
+    color: #94a3b8;
+    line-height: 1.5;
+  }
+  .flow-steps li::before {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 6px;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #475569;
+  }
+  .flow-steps li::after {
+    content: '';
+    position: absolute;
+    left: 8px;
+    top: 14px;
+    width: 1px;
+    height: calc(100% - 8px);
+    background: #1e293b;
+  }
+  .flow-steps li:last-child::after { display: none; }
+  .flow-steps li:last-child { padding-bottom: 0; }
+
+  /* ── Stats bar ── */
+  .stats {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    background: #111827;
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 14px 24px;
+    text-align: center;
+    min-width: 140px;
+  }
+  .stat-value {
+    font-size: 22px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .stat-label {
+    font-size: 11px;
+    color: #64748b;
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+
+  /* ── Legend ── */
+  .legend {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #64748b;
+  }
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 3px;
+  }
+</style>
+</head>
+<body>
+
+<h1>VideoSDK Docs MCP Server</h1>
+<p class="subtitle">Architecture &amp; Data Flow — ai_agents documentation</p>
+
+<!-- Stats -->
+<div class="stats">
+  <div class="stat"><div class="stat-value">120</div><div class="stat-label">Doc Files</div></div>
+  <div class="stat"><div class="stat-value">1,343</div><div class="stat-label">Chunks</div></div>
+  <div class="stat"><div class="stat-value">3</div><div class="stat-label">MCP Tools</div></div>
+  <div class="stat"><div class="stat-value">0</div><div class="stat-label">API Keys Needed</div></div>
+  <div class="stat"><div class="stat-value">1</div><div class="stat-label">Dependency</div></div>
+</div>
+
+<div style="height: 24px"></div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div>Startup / Loading</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#84cc16"></div>Search Engine</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#a855f7"></div>MCP Tools</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#f97316"></div>Transport</div>
+</div>
+
+<div style="height: 20px"></div>
+
+<div class="diagram">
+
+  <!-- ═══════════ PHASE 1: STARTUP ═══════════ -->
+  <div class="phase phase-startup">
+    <div class="phase-label">① Startup<br>Loading</div>
+    <div class="phase-content">
+
+      <div class="card">
+        <div class="card-icon">📂</div>
+        <h3>Recursive File Walker</h3>
+        <p><code>loadAllDocs(dir)</code> walks <code>ai_agents/</code> recursively, reads every <code>.md</code> file, and resolves relative paths via <code>__dirname</code>.</p>
+        <ul class="flow-steps">
+          <li>Reads directory entries</li>
+          <li>Recurses into subdirectories</li>
+          <li>Reads .md file content</li>
+          <li>Passes to chunker</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">✂️</div>
+        <h3>Markdown Chunker</h3>
+        <p><code>chunkByHeadings()</code> splits at <code>#</code>, <code>##</code>, <code>###</code> headings. Each chunk = <code>{ filePath, heading, text }</code>.</p>
+        <ul class="flow-steps">
+          <li>Scan lines for heading patterns</li>
+          <li>Flush accumulated text as a chunk</li>
+          <li>Start new chunk at each heading</li>
+          <li>Return array of structured chunks</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">🧠</div>
+        <h3>In-Memory Store</h3>
+        <p><code>ALL_CHUNKS[]</code> — a flat array holding all 1,343 chunks in memory. Loaded once at startup, queried on every search call.</p>
+        <ul class="flow-steps">
+          <li>120 files → 1,343 chunks</li>
+          <li>Each chunk: path + heading + text</li>
+          <li>No database, no files, no embeddings</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Arrow -->
+  <div class="arrow-row">
+    <svg viewBox="0 0 40 32"><path d="M20 0 L20 22"/><polygon points="14,20 20,30 26,20"/></svg>
+  </div>
+
+  <!-- ═══════════ PHASE 2: SEARCH ═══════════ -->
+  <div class="phase phase-search">
+    <div class="phase-label">② Search<br>Engine</div>
+    <div class="phase-content">
+
+      <div class="card">
+        <div class="card-icon">🔤</div>
+        <h3>Tokenizer</h3>
+        <p><code>tokenize(str)</code> extracts lowercase alphanumeric words via regex <code>/[a-z0-9]+/g</code>. Strips punctuation, normalizes case.</p>
+        <ul class="flow-steps">
+          <li>"OpenAI TTS plugin" → <code>["openai", "tts", "plugin"]</code></li>
+          <li>Applied to query, headings, and body text</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">⚖️</div>
+        <h3>Weighted Scorer</h3>
+        <p><code>scoreChunk()</code> scores every chunk against query tokens with a weighting system.</p>
+        <ul class="flow-steps">
+          <li><strong style="color:#84cc16">Exact match in heading → ×3</strong></li>
+          <li><strong style="color:#86efac">Exact match in body → ×1</strong></li>
+          <li><strong style="color:#a3e635">Substring match in heading → ×1.5</strong></li>
+          <li><strong style="color:#d9f99d">Substring match in body → ×0.5</strong></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">🏆</div>
+        <h3>Ranking &amp; Top-K</h3>
+        <p><code>searchDocs(query, topK)</code> scores all 1,343 chunks, filters out zeros, sorts descending, returns top 5.</p>
+        <ul class="flow-steps">
+          <li>Score all chunks</li>
+          <li>Filter score &gt; 0</li>
+          <li>Sort by score descending</li>
+          <li>Slice top 5 results</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Arrow -->
+  <div class="arrow-row">
+    <svg viewBox="0 0 40 32"><path d="M20 0 L20 22"/><polygon points="14,20 20,30 26,20"/></svg>
+  </div>
+
+  <!-- ═══════════ PHASE 3: MCP TOOLS ═══════════ -->
+  <div class="phase phase-tools">
+    <div class="phase-label">③ MCP<br>Tools</div>
+    <div class="phase-content">
+
+      <div class="card">
+        <div class="card-icon">🔍</div>
+        <h3>SearchDocsGoogle</h3>
+        <p>Takes a <code>query</code> string. Returns top 5 matching chunks with file path, section heading, score, and 1500-char preview.</p>
+        <p style="margin-top:8px; color:#c084fc; font-size:11px;">INPUT: <code>{ query: "openai tts" }</code></p>
+        <p style="color:#c084fc; font-size:11px;">OUTPUT: Ranked results with context</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">📋</div>
+        <h3>list_docs</h3>
+        <p>No arguments. Returns all 120 unique file paths — a complete table of contents of the documentation tree.</p>
+        <p style="margin-top:8px; color:#c084fc; font-size:11px;">INPUT: <code>{}</code></p>
+        <p style="color:#c084fc; font-size:11px;">OUTPUT: Sorted file path list</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">📄</div>
+        <h3>get_doc</h3>
+        <p>Takes a relative <code>path</code> (from list_docs). Returns the full raw markdown content of that file.</p>
+        <p style="margin-top:8px; color:#c084fc; font-size:11px;">INPUT: <code>{ path: "plugins/llm/openai.md" }</code></p>
+        <p style="color:#c084fc; font-size:11px;">OUTPUT: Full markdown content</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Arrow -->
+  <div class="arrow-row">
+    <svg viewBox="0 0 40 32"><path d="M20 0 L20 22"/><polygon points="14,20 20,30 26,20"/></svg>
+  </div>
+
+  <!-- ═══════════ PHASE 4: TRANSPORT ═══════════ -->
+  <div class="phase phase-transport">
+    <div class="phase-label">④ Transport<br>Layer</div>
+    <div class="phase-content">
+
+      <div class="card">
+        <div class="card-icon">🔌</div>
+        <h3>StdioServerTransport</h3>
+        <p>Communicates via <code>stdin</code> / <code>stdout</code> using JSON-RPC. Claude Code launches the server as a subprocess and sends/receives MCP protocol messages over the pipe.</p>
+        <ul class="flow-steps">
+          <li>Claude Code spawns <code>node server.js</code></li>
+          <li>Sends JSON-RPC over stdin</li>
+          <li>Receives tool results over stdout</li>
+          <li>stderr used for logging only</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">🤖</div>
+        <h3>Client (Claude Code / Desktop)</h3>
+        <p>The AI calls <code>ListTools</code> to discover the 3 tools, then <code>CallTool</code> to search, list, or read docs — all transparently during conversation.</p>
+        <ul class="flow-steps">
+          <li>Discovers tools at session start</li>
+          <li>Calls SearchDocsGoogle for queries</li>
+          <li>Calls list_docs to browse</li>
+          <li>Calls get_doc to read full files</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">💬</div>
+        <h3>Typical Flow</h3>
+        <p>User asks about VideoSDK → Claude searches docs → reads relevant file → gives grounded answer with code examples.</p>
+        <ul class="flow-steps">
+          <li>User: "How to use Deepgram STT?"</li>
+          <li>Claude → SearchDocsGoogle("deepgram stt")</li>
+          <li>Claude → get_doc("plugins/stt/deepgram.md")</li>
+          <li>Claude answers with full context</li>
+        </ul>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<div style="height: 40px"></div>
+
+</body>
+</html>
